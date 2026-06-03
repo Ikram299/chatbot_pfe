@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth  # 👈 IMPORTANT
+from app.routes import auth, chat  # 👈 AJOUT CHAT
 
 app = FastAPI()
 
@@ -19,3 +19,4 @@ app.add_middleware(
 
 # 👇 REGISTER + LOGIN ROUTES
 app.include_router(auth.router)
+app.include_router(chat.router)  # 👈 IMPORTANT
