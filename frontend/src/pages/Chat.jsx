@@ -5,64 +5,93 @@ import "../styles/Chat.css";
 function Chat() {
   const navigate = useNavigate();
 
-  // Messages du chat
   const [messages, setMessages] = useState([
     {
       role: "bot",
-      text: "Bienvenue sur EduAI Assistant 🎓 Posez une question sur vos cours ou vos documents."
-    }
+      text: "Bienvenue sur EduAI Assistant 🎓 Posez une question sur vos cours ou vos documents.",
+    },
   ]);
 
   const [input, setInput] = useState("");
 
-  // Sources pédagogiques
   const [sources, setSources] = useState([
     { id: 1, name: "Cours_Mitose_Biologie.pdf", type: "pdf" },
-    { id: 2, name: "Notes_Philosophie_Texte.txt", type: "text" }
+    { id: 2, name: "Notes_Philosophie_Texte.txt", type: "text" },
   ]);
 
-  // Envoyer message
-  const sendMessage = () => {
+  // 💬 SEND MESSAGE (CORRIGÉ + PROPRE)
+  const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const newMsg = {
-      role: "user",
-      text: input,
-    };
+    const userText = input;
 
-    setMessages((prev) => [...prev, newMsg]);
+    // add user message
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: userText },
+    ]);
+
     setInput("");
 
-    // réponse simulée IA
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
+    // loading message
+    setMessages((prev) => [
+      ...prev,
+      { role: "bot", text: "⏳ Analyse en cours..." },
+    ]);
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/chat/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userText,
+        }),
+      });
+
+      const data = await res.json();
+
+      // remplacer le dernier message (loading)
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
           role: "bot",
-          text: "Analyse en cours des documents académiques... Voici une réponse basée sur vos cours."
-        }
-      ]);
-    }, 1000);
+          text: data.response,
+        };
+        return updated;
+      });
+
+    } catch (error) {
+      console.error(error);
+
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: "bot",
+          text: "❌ Erreur serveur",
+        };
+        return updated;
+      });
+    }
   };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") sendMessage();
   };
 
-  // logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/");
   };
 
-  // ajouter source
   const handleAddSource = () => {
     const sourceName = prompt("Nom du document ou lien de la source :");
 
     if (sourceName) {
       setSources((prev) => [
         ...prev,
-        { id: Date.now(), name: sourceName, type: "web" }
+        { id: Date.now(), name: sourceName, type: "web" },
       ]);
     }
   };
@@ -122,6 +151,7 @@ function Chat() {
                 </div>
               ))}
             </div>
+
           </div>
         </aside>
 
