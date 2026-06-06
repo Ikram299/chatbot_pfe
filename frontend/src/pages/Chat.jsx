@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Chat.css";
 
 function Chat() {
   const navigate = useNavigate();
+  
+  // Référence pour l'auto-scroll
+  const messagesEndRef = useRef(null);
 
   // =========================
   // STATE
@@ -18,6 +21,18 @@ function Chat() {
   const [input, setInput] = useState("");
   const [conversations, setConversations] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
+  const [isTyping, setIsTyping] = useState(false); // État pour l'animation de réflexion
+
+  // =========================
+  // AUTO-SCROLL
+  // =========================
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]); // Scrolle dès que les messages changent ou que le bot tape
 
   // =========================
   // USER ID
@@ -35,15 +50,10 @@ function Chat() {
     if (!user_id) return;
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/conversations/${user_id}`
-      );
-
+      const res = await fetch(`http://127.0.0.1:8000/conversations/${user_id}`);
       const data = await res.json();
 
-      const messagesArray = Array.isArray(data)
-        ? data
-        : data.messages || [];
+      const messagesArray = Array.isArray(data) ? data : data.messages || [];
 
       const formatted = messagesArray.map((msg) => ({
         role: msg.role,
@@ -70,12 +80,8 @@ function Chat() {
     if (!user_id) return;
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/conversations/${user_id}`
-      );
-
+      const res = await fetch(`http://127.0.0.1:8000/conversations/${user_id}`);
       const data = await res.json();
-
       setConversations(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("loadConversations error:", err);
@@ -87,15 +93,10 @@ function Chat() {
   // =========================
   const loadMessages = async (conversation_id) => {
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/messages/${conversation_id}`
-      );
-
+      const res = await fetch(`http://127.0.0.1:8000/messages/${conversation_id}`);
       const data = await res.json();
 
-      const messagesArray = Array.isArray(data)
-        ? data
-        : data.messages || [];
+      const messagesArray = Array.isArray(data) ? data : data.messages || [];
 
       const formatted = messagesArray.map((msg) => ({
         role: msg.role,
@@ -134,12 +135,9 @@ function Chat() {
 
     setInput("");
 
-    // add messages
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: userText },
-      { role: "bot", text: "⏳ Analyse en cours..." },
-    ]);
+    // Ajouter le message de l'utilisateur et activer le mode "isTyping" (style ChatGPT)
+    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+    setIsTyping(true);
 
     try {
       const res = await fetch("http://127.0.0.1:8000/chat", {
@@ -155,38 +153,27 @@ function Chat() {
       const data = await res.json();
 
       if (!currentConversation) {
-  setCurrentConversation(data.conversation_id);
-  await loadConversations();
-}
+        setCurrentConversation(data.conversation_id);
+        await loadConversations();
+      }
 
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
+      // Désactiver le chargement et ajouter la réponse avec une classe d'animation d'apparition
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        {
           role: "bot",
           text: data.response || "❌ réponse vide",
-        };
-        return updated;
-      });
+          isNew: true, // Tag pour déclencher l'effet fade-in/typing en CSS
+        },
+      ]);
     } catch (err) {
       console.error("sendMessage error:", err);
-
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "bot",
-          text: "❌ erreur serveur",
-        };
-        return updated;
-      });
-    }
-  };
-
-  // =========================
-  // KEY PRESS
-  // =========================
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") {
-      sendMessage();
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", text: "❌ erreur serveur" },
+      ]);
     }
   };
 
@@ -204,11 +191,9 @@ function Chat() {
   // =========================
   return (
     <div className="notebook-container">
-
       <header className="notebook-header">
         <div className="header-left">
           <div className="app-logo">🎓</div>
-
           <div className="notebook-title-wrapper">
             <h1 className="notebook-title">EduAI Assistant</h1>
             <span className="notebook-status">
@@ -226,15 +211,13 @@ function Chat() {
       </header>
 
       <div className="notebook-workspace">
-
-        {/* LEFT */}
+        {/* LEFT PANEL */}
         <aside className="panel panel-sources">
           <div className="panel-header">
             <h3>Conversations</h3>
           </div>
 
           <div className="panel-content">
-
             <button
               className="btn-add-source"
               onClick={() => {
@@ -251,30 +234,25 @@ function Chat() {
             </button>
 
             <div className="sources-list">
-              {(Array.isArray(conversations) ? conversations : []).map(
-                (conv) => (
-                  <div
-                    key={conv.id}
-                    className={`source-item ${
-                      currentConversation === conv.id ? "active" : ""
-                    }`}
-                    onClick={() => loadMessages(conv.id)}
-                  >
-                    📚 {conv.title || "Conversation"}
-                  </div>
-                )
-              )}
+              {(Array.isArray(conversations) ? conversations : []).map((conv) => (
+                <div
+                  key={conv.id}
+                  className={`source-item ${
+                    currentConversation === conv.id ? "active" : ""
+                  }`}
+                  onClick={() => loadMessages(conv.id)}
+                >
+                  📚 {conv.title || "Conversation"}
+                </div>
+              ))}
             </div>
-
           </div>
         </aside>
 
-        {/* CENTER */}
+        {/* CENTER PANEL (CHAT) */}
         <main className="panel panel-discussion">
-
           <div className="chat-area">
             <div className="messages-container">
-
               {messages.map((msg, index) => (
                 <div
                   key={index}
@@ -282,74 +260,77 @@ function Chat() {
                     msg.role === "user" ? "user-row" : "bot-row"
                   }`}
                 >
-                  <div className="message-avatar">
+                  <div className={`message-avatar ${msg.role}`}>
                     {msg.role === "user" ? "👤" : "🤖"}
                   </div>
 
                   <div className="message-bubble-content">
-                    <p className="message-text">{msg.text}</p>
+                    <p className={`message-text ${msg.isNew ? "typing-effect" : ""}`}>
+                      {msg.text}
+                    </p>
                   </div>
                 </div>
               ))}
 
+              {/* Animation des 3 points de ChatGPT quand le bot réfléchit */}
+              {isTyping && (
+                <div className="message-row bot-row">
+                  <div className="message-avatar bot">🤖</div>
+                  <div className="message-bubble-content">
+                    <div className="chatgpt-typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Élément invisible pour forcer le scroll en bas */}
+              <div ref={messagesEndRef} />
             </div>
           </div>
 
-          {/* INPUT */}
+          {/* INPUT BAR */}
           <div className="chat-input-wrapper">
-
             <div className="chat-input-container">
-
               <input
-  type="text"
-  value={input}
-  onChange={(e) => setInput(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      sendMessage();
-    }
-  }}
-  placeholder="Posez une question..."
-  className="chat-input-field"
-/>
-
-             <button
-  type="button"
-  className={`chat-send-btn ${input.trim() ? "active" : ""}`}
-  onClick={sendMessage}
->
-  ▲
-</button>
-
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder="Posez une question..."
+                className="chat-input-field"
+              />
+              <button
+                type="button"
+                className={`chat-send-btn ${input.trim() ? "active" : ""}`}
+                onClick={sendMessage}
+              >
+                ▲
+              </button>
             </div>
-
-            <div className="disclaimer-text">
-              EduAI peut se tromper.
-            </div>
-
+            <div className="disclaimer-text">EduAI peut se tromper.</div>
           </div>
-
         </main>
 
-        {/* RIGHT */}
+        {/* RIGHT PANEL */}
         <aside className="panel panel-studio">
-
           <div className="panel-header">
             <h3>Studio académique</h3>
           </div>
-
           <div className="panel-content">
-
             <button className="studio-card">📊 Résumé</button>
             <button className="studio-card">📝 Fiches</button>
             <button className="studio-card">🎯 Quiz</button>
             <button className="studio-card">📈 Analyse</button>
-
           </div>
-
         </aside>
-
       </div>
     </div>
   );
