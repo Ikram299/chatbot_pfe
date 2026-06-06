@@ -154,7 +154,10 @@ function Chat() {
 
       const data = await res.json();
 
-      setCurrentConversation(data.conversation_id);
+      if (!currentConversation) {
+  setCurrentConversation(data.conversation_id);
+  await loadConversations();
+}
 
       setMessages((prev) => {
         const updated = [...prev];
