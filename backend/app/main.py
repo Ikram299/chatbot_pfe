@@ -12,7 +12,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS pour React
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -24,21 +24,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes Auth
+# AUTH ROUTES
 app.include_router(
     auth.router,
     prefix="/auth",
     tags=["Authentication"]
 )
 
-# Routes Chat
+# CHAT ROUTES (IMPORTANT FIX)
 app.include_router(
     chat.router,
-    prefix="/chat",
+    prefix="",
     tags=["Chatbot"]
 )
 
-# Route de test
+# TEST API
 @app.get("/")
 def root():
     return {

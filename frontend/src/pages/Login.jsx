@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(""); // Remplacement de l'alert par un vrai message d'erreur
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -16,9 +16,29 @@ function Login() {
     setLoading(true);
 
     try {
-      const res = await loginUser({ email, password });
-      localStorage.setItem("token", res.data.access_token);
-      navigate("/chat");
+    const res = await loginUser({ email, password });
+
+console.log("LOGIN RESPONSE:", res.data);
+
+// token
+localStorage.setItem("token", res.data.access_token);
+
+// user id SAFE (corrigé)
+const userId =
+  res.data.user?.id ||
+  res.data.user_id ||
+  res.data.id;
+
+if (!userId) {
+  console.error("❌ user_id introuvable dans la réponse backend");
+  return;
+}
+
+localStorage.setItem("user_id", userId);
+
+console.log("USER ID STOCKÉ:", userId);
+
+navigate("/chat");
     } catch (error) {
       setError("Email ou mot de passe incorrect");
       console.error(error);
@@ -30,16 +50,18 @@ function Login() {
   return (
     <div style={styles.pageWrapper}>
       <div style={styles.card}>
-        {/* En-tête Académique */}
+
+        {/* HEADER */}
         <div style={styles.header}>
           <div style={styles.logoSquare}>🎓</div>
           <h2 style={styles.title}>EduAI Assistant</h2>
           <p style={styles.subtitle}>Votre compagnon d'étude intelligent</p>
         </div>
 
-        {/* Message d'erreur élégant */}
+        {/* ERROR */}
         {error && <div style={styles.errorMessage}>{error}</div>}
 
+        {/* FORM */}
         <form onSubmit={handleLogin} style={styles.form}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Adresse email</label>
@@ -65,9 +87,12 @@ function Login() {
             />
           </div>
 
-          <button 
-            type="submit" 
-            style={{...styles.button, ...(loading ? styles.buttonDisabled : {})}}
+          <button
+            type="submit"
+            style={{
+              ...styles.button,
+              ...(loading ? styles.buttonDisabled : {}),
+            }}
             disabled={loading}
           >
             {loading ? "Connexion en cours..." : "Se connecter"}
@@ -80,10 +105,12 @@ function Login() {
             Créer un compte
           </span>
         </p>
+
       </div>
     </div>
   );
 }
+
 
 // Palette de couleurs : Bleu Académique & Minimalisme
 const styles = {
