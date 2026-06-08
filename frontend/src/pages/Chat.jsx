@@ -94,7 +94,7 @@ function Chat() {
   // =========================
   const loadMessages = async (conversation_id) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/messages/${conversation_id}`);
+      const res = await fetch(`http://127.0.0.1:8000/chat/messages/${conversation_id}`);
       const data = await res.json();
 
       const messagesArray = Array.isArray(data) ? data : data.messages || [];
@@ -198,7 +198,7 @@ function Chat() {
   formData.append("user_id", userId);
 
   try {
-    const res = await fetch("http://127.0.0.1:8000/upload-pdf", {
+    const res = await fetch("http://127.0.0.1:8000/documents/upload-pdf", {
       method: "POST",
       body: formData,
     });
