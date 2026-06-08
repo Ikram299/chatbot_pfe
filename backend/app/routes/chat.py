@@ -39,15 +39,28 @@ def chat(data: dict):
         "role": "user",
         "content": user_message
     }).execute()
-
+    # ================= PDF CONTEXT =================
+    docs = supabase.table("documents") \
+        .select("text, file_name")\
+        .eq("user_id", user_id) \
+        .execute()
+    context = ""
+    for doc in docs.data:
+        context += f"\nDocument: {doc.get('file_name','')}\n{doc.get('text','')}\n"
     # OPENAI
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Assistant académique simple."},
-            {"role": "user", "content": user_message}
-        ]
-    )
+    model="gpt-4o-mini",
+   messages=[
+    {
+        "role": "system",
+        "content": f"Tu es un assistant académique. Utilise ce contexte PDF:\n{context}"
+    },
+    {
+        "role": "user",
+        "content": user_message
+    }
+]
+)
 
     bot_response = response.choices[0].message.content
 

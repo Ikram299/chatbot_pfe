@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form
 import fitz  # PyMuPDF
 from app.models.document import Document
-from app.database import SessionLocal
+from app.database.db import SessionLocal
 
 router = APIRouter()
 
