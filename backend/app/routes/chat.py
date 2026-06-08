@@ -9,7 +9,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # ================= CHAT =================
-@router.post("/chat")
+@router.post("/")
 def chat(data: dict):
 
     user_message = data.get("message")
@@ -72,7 +72,7 @@ def get_conversations(user_id: int):
     response = supabase.table("conversations") \
         .select("*") \
         .eq("user_id", user_id) \
-        .order("created_at", desc=True) \
+        .order("id", desc=True) \
         .execute()
 
     return response.data or []

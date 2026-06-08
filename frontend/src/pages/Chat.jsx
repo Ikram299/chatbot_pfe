@@ -22,6 +22,7 @@ function Chat() {
   const [conversations, setConversations] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isTyping, setIsTyping] = useState(false); // État pour l'animation de réflexion
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // =========================
   // AUTO-SCROLL
@@ -50,7 +51,7 @@ function Chat() {
     if (!user_id) return;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/conversations/${user_id}`);
+      const res = await fetch(`http://127.0.0.1:8000/chat/conversations/${user_id}`);
       const data = await res.json();
 
       const messagesArray = Array.isArray(data) ? data : data.messages || [];
@@ -80,7 +81,7 @@ function Chat() {
     if (!user_id) return;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/conversations/${user_id}`);
+      const res = await fetch(`http://127.0.0.1:8000/chat/conversations/${user_id}`);
       const data = await res.json();
       setConversations(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -186,6 +187,37 @@ function Chat() {
     navigate("/");
   };
 
+  const uploadPDF = async () => {
+  if (!selectedFile) return;
+
+  const userId = getUserId();
+  if (!userId) return;
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+  formData.append("user_id", userId);
+
+  try {
+    const res = await fetch("http://127.0.0.1:8000/upload-pdf", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text: "📄 PDF uploadé avec succès !",
+      },
+    ]);
+
+    console.log("PDF response:", data);
+  } catch (err) {
+    console.error("uploadPDF error:", err);
+  }
+};
   // =========================
   // UI
   // =========================
@@ -325,10 +357,10 @@ function Chat() {
             <h3>Studio académique</h3>
           </div>
           <div className="panel-content">
-            <button className="studio-card">📊 Résumé</button>
-            <button className="studio-card">📝 Fiches</button>
-            <button className="studio-card">🎯 Quiz</button>
-            <button className="studio-card">📈 Analyse</button>
+            <input type="file" accept=".pdf" onChange={(e) => setSelectedFile(e.target.files[0])}/>
+            <button className="studio-card" onClick={uploadPDF}>
+                    📁 Upload PDF
+            </button>
           </div>
         </aside>
       </div>

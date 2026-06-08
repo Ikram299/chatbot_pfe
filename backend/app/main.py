@@ -4,7 +4,10 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth, chat
+from app.routes.auth import router as auth_router
+from app.routes.chat import router as chat_router
+from app.routes.documents import router as document_router
+
 
 app = FastAPI(
     title="EduAI Assistant",
@@ -24,23 +27,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# AUTH ROUTES
-app.include_router(
-    auth.router,
-    prefix="/auth",
-    tags=["Authentication"]
-)
+# ROUTES
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(chat_router, prefix="/chat", tags=["Chatbot"])
+app.include_router(document_router, prefix="/documents", tags=["Documents"])
 
-# CHAT ROUTES (IMPORTANT FIX)
-app.include_router(
-    chat.router,
-    prefix="",
-    tags=["Chatbot"]
-)
 
-# TEST API
 @app.get("/")
 def root():
-    return {
-        "message": "EduAI Assistant API is running 🚀"
-    }
+    return {"message": "EduAI Assistant API is running 🚀"}
