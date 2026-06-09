@@ -1,30 +1,26 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from app.database.supabase import supabase
-from openai import OpenAI
+from app.agents.comprehension import get_embedding
 import fitz
 import os
 
 router = APIRouter()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def get_embedding(text):
-    response = client.embeddings.create(
-        model="text-embedding-ada-002",
-        input=text
-    )
-    return response.data[0].embedding
-
-def split_chunks(text, chunk_size=500):
+def split_chunks(text, chunk_size=500, overlap=50):
+    """Chunking avec overlap pour ne pas perdre d'information"""
     words = text.split()
     chunks = []
-    for i in range(0, len(words), chunk_size):
+    i = 0
+    while i < len(words):
         chunk = " ".join(words[i:i+chunk_size])
         chunks.append(chunk)
+        i += chunk_size - overlap
     return chunks
 
 @router.post("/upload-pdf")
 async def upload_pdf(user_id: int = Form(...), file: UploadFile = File(...)):
 
+    # Lire le PDF
     pdf_bytes = await file.read()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
@@ -46,8 +42,10 @@ async def upload_pdf(user_id: int = Form(...), file: UploadFile = File(...)):
 
     document_id = result.data[0]["id"]
 
-    # Découper en chunks et générer embeddings
-    chunks = split_chunks(text)
+    # Chunking avec overlap + embeddings
+    chunks = split_chunks(text, chunk_size=500, overlap=50)
+    chunks_created = 0
+
     for chunk in chunks:
         if len(chunk.strip()) < 50:
             continue
@@ -58,9 +56,10 @@ async def upload_pdf(user_id: int = Form(...), file: UploadFile = File(...)):
             "content": chunk,
             "embedding": embedding
         }).execute()
+        chunks_created += 1
 
     return {
-        "message": f"PDF uploadé avec succès — {len(chunks)} chunks créés",
+        "message": f"PDF uploadé — {chunks_created} chunks créés avec overlap",
         "document_id": document_id,
         "file_name": file.filename
     }
