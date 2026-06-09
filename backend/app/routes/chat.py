@@ -7,6 +7,31 @@ from app.database.supabase import supabase
 router = APIRouter()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+def get_embedding(text):
+    response = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text
+    )
+    return response.data[0].embedding
+
+def search_chunks(question, document_id, user_id):
+    question_embedding = get_embedding(question)
+    
+    result = supabase.rpc("match_chunks", {
+        "query_embedding": question_embedding,
+        "document_id_filter": document_id,
+        "match_count": 3
+    }).execute()
+    
+    if result.data:
+        return "\n\n".join([r["content"] for r in result.data])
+    
+    # Fallback si pas de chunks
+    docs = supabase.table("documents").select("text").eq("id", document_id).execute()
+    if docs.data:
+        return docs.data[0]["text"][:3000]
+    return ""
+
 @router.post("/")
 async def chat(data: dict):
     user_message = data.get("message")
@@ -39,30 +64,32 @@ async def chat(data: dict):
         "content": user_message
     }).execute()
 
+    # RAG — chercher les chunks pertinents
     context = ""
     if document_id:
-        docs = supabase.table("documents").select("text, file_name").eq("id", document_id).execute()
-        for doc in docs.data:
-            context += f"\nDocument: {doc.get('file_name','')}\n{doc.get('text','')[:3000]}\n"
+        context = search_chunks(user_message, document_id, user_id)
 
     if not context:
         context = "Aucun document disponible."
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": f"Tu es un assistant académique. Réponds basé sur ce contenu:\n{context}"
-            },
-            {
-                "role": "user",
-                "content": user_message
-            }
-        ]
-    )
-
-    bot_response = response.choices[0].message.content
+    # Agent Validation — vérifier le contexte
+    if len(context) < 10:
+        bot_response = "Je n'ai pas trouvé d'information pertinente dans le document."
+    else:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"Tu es un assistant académique. Réponds UNIQUEMENT basé sur ce contenu:\n{context}"
+                },
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ]
+        )
+        bot_response = response.choices[0].message.content
 
     supabase.table("messages").insert({
         "user_id": user_id,
@@ -95,28 +122,30 @@ async def summary(data: dict):
     if not user_id:
         return {"error": "user_id missing"}
 
-    if not document_id:
-        docs = supabase.table("documents").select("text, file_name").eq("user_id", user_id).order("id", desc=True).limit(1).execute()
+    if document_id:
+        chunks = supabase.table("chunks").select("content").eq("document_id", document_id).limit(10).execute()
     else:
-        docs = supabase.table("documents").select("text, file_name").eq("id", document_id).execute()
+        docs = supabase.table("documents").select("id").eq("user_id", user_id).order("id", desc=True).limit(1).execute()
+        if not docs.data:
+            return {"summary": "Aucun document trouvé."}
+        document_id = docs.data[0]["id"]
+        chunks = supabase.table("chunks").select("content").eq("document_id", document_id).limit(10).execute()
 
-    if not docs.data:
-        return {"summary": "Aucun document trouvé. Veuillez d'abord uploader un PDF."}
+    if not chunks.data:
+        return {"summary": "Aucun contenu trouvé."}
 
-    full_text = ""
-    for doc in docs.data:
-        full_text += f"\n{doc.get('text','')[:3000]}\n"
+    full_text = "\n\n".join([c["content"] for c in chunks.data])
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
-                "content": "Tu es un agent de résumé académique. Génère un résumé clair et structuré avec les points clés."
+                "content": "Tu es un agent de résumé académique. Génère un résumé clair et structuré."
             },
             {
                 "role": "user",
-                "content": f"Résume ce cours de façon claire et structurée:\n{full_text}"
+                "content": f"Résume ce cours:\n{full_text}"
             }
         ]
     )
@@ -133,21 +162,23 @@ async def quiz(data: dict):
     if not user_id:
         return {"error": "user_id missing"}
 
-    if not document_id:
-        docs = supabase.table("documents").select("text, file_name").eq("user_id", user_id).order("id", desc=True).limit(1).execute()
+    if document_id:
+        chunks = supabase.table("chunks").select("content").eq("document_id", document_id).limit(10).execute()
     else:
-        docs = supabase.table("documents").select("text, file_name").eq("id", document_id).execute()
+        docs = supabase.table("documents").select("id").eq("user_id", user_id).order("id", desc=True).limit(1).execute()
+        if not docs.data:
+            return {"quiz": []}
+        document_id = docs.data[0]["id"]
+        chunks = supabase.table("chunks").select("content").eq("document_id", document_id).limit(10).execute()
 
-    if not docs.data:
+    if not chunks.data:
         return {"quiz": []}
 
-    full_text = ""
-    for doc in docs.data:
-        full_text += f"\n{doc.get('text','')[:3000]}\n"
+    full_text = "\n\n".join([c["content"] for c in chunks.data])
 
     if quiz_type == "vrai_faux":
-        prompt = f"""Génère 5 questions Vrai/Faux de niveau {level} basées sur ce cours.
-Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
+        prompt = f"""Génère 5 questions Vrai/Faux de niveau {level}.
+Réponds UNIQUEMENT en JSON valide:
 [
   {{
     "question": "La question ici",
@@ -157,8 +188,8 @@ Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
 ]
 Cours: {full_text}"""
     else:
-        prompt = f"""Génère 5 questions QCM de niveau {level} basées sur ce cours.
-Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
+        prompt = f"""Génère 5 questions QCM de niveau {level}.
+Réponds UNIQUEMENT en JSON valide:
 [
   {{
     "question": "La question ici",
@@ -173,7 +204,7 @@ Cours: {full_text}"""
         messages=[
             {
                 "role": "system",
-                "content": "Tu es un agent de génération de quiz. Tu réponds UNIQUEMENT en JSON valide sans markdown."
+                "content": "Tu es un agent de génération de quiz. Réponds UNIQUEMENT en JSON valide."
             },
             {
                 "role": "user",
