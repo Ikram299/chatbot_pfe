@@ -47,7 +47,7 @@ async def chat(data: dict):
     if conversation_id is None:
         conv = supabase.table("conversations").insert({
             "user_id": user_id,
-            "title": user_message[:30] if user_message else "Nouvelle conversation",
+"title": user_message[:30] if user_message else "Nouvelle conversation",
             "document_id": document_id
         }).execute()
         conversation_id = conv.data[0]["id"]
@@ -220,3 +220,4 @@ Cours: {full_text}"""
         return {"quiz": questions}
     except:
         return {"quiz": []}
+

@@ -35,6 +35,8 @@ if (!userId) {
 }
 
 localStorage.setItem("user_id", userId);
+localStorage.setItem("user_name", res.data.name || "Utilisateur");
+localStorage.setItem("user_email", res.data.email || "");
 
 console.log("USER ID STOCKÉ:", userId);
 
