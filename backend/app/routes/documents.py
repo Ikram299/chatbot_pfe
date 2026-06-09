@@ -1,15 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, Form
-import fitz  # PyMuPDF
-from app.models.document import Document
-from app.database.db import SessionLocal
+from app.database.supabase import supabase
+import fitz
 
 router = APIRouter()
 
 @router.post("/upload-pdf")
 async def upload_pdf(user_id: int = Form(...), file: UploadFile = File(...)):
-    db = SessionLocal()
-
-    # 1. lire le fichier PDF
+    
     pdf_bytes = await file.read()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
@@ -17,19 +14,20 @@ async def upload_pdf(user_id: int = Form(...), file: UploadFile = File(...)):
     for page in doc:
         text += page.get_text()
 
-    # 2. sauvegarder en DB
-    document = Document(
-        user_id=user_id,
-        file_name=file.filename,
-        text=text
-    )
+    text = text.replace("\x00", "")
+    text = text.encode("utf-8", errors="ignore").decode("utf-8")
+    text = "".join(c for c in text if c.isprintable() or c in "\n\t ")
 
-    db.add(document)
-    db.commit()
-    db.refresh(document)
+    result = supabase.table("documents").insert({
+        "user_id": user_id,
+        "file_name": file.filename,
+        "text": text
+    }).execute()
+
+    document_id = result.data[0]["id"]
 
     return {
         "message": "PDF uploadé avec succès",
-        "document_id": document.id,
-        "text_preview": text[:300]
+        "document_id": document_id,
+        "file_name": file.filename
     }
